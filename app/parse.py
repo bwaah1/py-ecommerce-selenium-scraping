@@ -4,6 +4,7 @@ from dataclasses import dataclass, asdict
 from typing import List
 from urllib.parse import urljoin
 
+import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -38,6 +39,13 @@ def parse_single_product(soup: BeautifulSoup) -> Product:
     )
 
 
+def get_static_page_products(url: str) -> List[Product]:
+    page = requests.get(url).text
+    soup = BeautifulSoup(page, "html.parser")
+    products_soup = soup.select(".thumbnail")
+    return [parse_single_product(product) for product in products_soup]
+
+
 def get_page_products_with_more_button(url: str) -> List[Product]:
     driver = webdriver.Chrome()
     driver.get(url)
@@ -55,7 +63,7 @@ def get_page_products_with_more_button(url: str) -> List[Product]:
             )
             driver.execute_script("arguments[0].click();", more_button)
             time.sleep(2)
-        except Exception as e:
+        except Exception:
             break
 
     driver.quit()
@@ -72,16 +80,19 @@ def write_to_csv(products: List[Product], filename: str) -> None:
 
 def get_all_products() -> None:
     urls = {
-        HOME_URL: "home.csv",
-        COMPUTER_URL: "computers.csv",
-        LAPTOP_URL: "laptops.csv",
-        TABLET_URL: "tablets.csv",
-        PHONE_URL: "phones.csv",
-        TOUCH_URL: "touch.csv",
+        HOME_URL: ("home.csv", False),
+        COMPUTER_URL: ("computers.csv", False),
+        LAPTOP_URL: ("laptops.csv", True),
+        TABLET_URL: ("tablets.csv", True),
+        PHONE_URL: ("phones.csv", False),
+        TOUCH_URL: ("touch.csv", True),
     }
 
-    for url, filename in urls.items():
-        products = get_page_products_with_more_button(url)
+    for url, (filename, use_more_button) in urls.items():
+        if use_more_button:
+            products = get_page_products_with_more_button(url)
+        else:
+            products = get_static_page_products(url)
         write_to_csv(products, filename)
 
 
